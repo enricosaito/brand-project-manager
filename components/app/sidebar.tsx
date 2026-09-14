@@ -9,14 +9,17 @@ import {
   RiCheckLine,
   RiFolder3Line,
   RiImage2Line,
+  RiLogoutBoxRLine,
   RiMoonLine,
   RiSparklingLine,
   RiSunLine,
+  RiUser3Line,
 } from "@remixicon/react"
 import { useTheme } from "next-themes"
 
+import { signOut } from "@/app/(auth)/login/actions"
 import { Logo } from "@/components/app/logo"
-import { MemberAvatar } from "@/components/app/member-avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useCurrentMember } from "@/lib/store/workspace"
+import type { AuthUser } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
 const WORKSPACES = [
@@ -46,6 +49,7 @@ const FUTURE = [
 ]
 
 interface SidebarProps {
+  user: AuthUser
   /** Icon-only rail for medium widths. */
   collapsed?: boolean
   /** Called after navigation, used to close the mobile sheet. */
@@ -53,7 +57,12 @@ interface SidebarProps {
   className?: string
 }
 
-export function Sidebar({ collapsed = false, onNavigate, className }: SidebarProps) {
+export function Sidebar({
+  user,
+  collapsed = false,
+  onNavigate,
+  className,
+}: SidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -121,7 +130,7 @@ export function Sidebar({ collapsed = false, onNavigate, className }: SidebarPro
       </nav>
 
       {/* Footer */}
-      <SidebarFooter collapsed={collapsed} />
+      <SidebarFooter user={user} collapsed={collapsed} />
     </div>
   )
 }
@@ -269,24 +278,54 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   )
 }
 
-function SidebarFooter({ collapsed }: { collapsed: boolean }) {
-  const member = useCurrentMember()
+function SidebarFooter({ user, collapsed }: { user: AuthUser; collapsed: boolean }) {
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center gap-2 border-t border-sidebar-border py-3",
+        "flex shrink-0 items-center gap-1 border-t border-sidebar-border py-3",
         collapsed ? "flex-col" : "px-1"
       )}
     >
-      <div className={cn("flex min-w-0 flex-1 items-center gap-2.5", collapsed && "flex-none")}>
-        <MemberAvatar member={member} size="sm" withTooltip={collapsed} />
-        {!collapsed && (
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-[13px] font-medium">{member.name}</div>
-            <div className="truncate text-[11px] text-muted-foreground">{member.role}</div>
-          </div>
-        )}
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label="Account menu"
+          className={cn(
+            "flex min-w-0 items-center gap-2.5 rounded-md text-left outline-none transition-colors hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/30 aria-expanded:bg-sidebar-accent",
+            collapsed ? "size-8 justify-center" : "h-10 flex-1 px-1.5"
+          )}
+        >
+          <Avatar className="size-6 text-[11px] after:border-foreground/10 after:mix-blend-normal">
+            <AvatarFallback className="bg-secondary font-medium tracking-wide text-foreground/80 text-[length:inherit]">
+              {user.initials}
+            </AvatarFallback>
+          </Avatar>
+          {!collapsed && (
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-[13px] font-medium">{user.name}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{user.email}</div>
+            </div>
+          )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          side={collapsed ? "right" : "top"}
+          sideOffset={8}
+          className="w-60"
+        >
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
+            <DropdownMenuItem disabled>
+              <RiUser3Line />
+              Account settings
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => signOut()}>
+            <RiLogoutBoxRLine />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <ThemeToggle />
     </div>
   )
