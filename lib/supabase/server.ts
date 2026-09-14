@@ -8,8 +8,10 @@ import { supabaseEnv } from "./env"
  * Create a new instance per request; never share it across requests.
  */
 export async function createClient() {
-  const { url, key } = supabaseEnv()
+  // Read cookies before touching env so Next marks the route dynamic first.
+  // Otherwise a build without env vars fails while trying to prerender.
   const cookieStore = await cookies()
+  const { url, key } = supabaseEnv()
 
   return createServerClient(url, key, {
     cookies: {
