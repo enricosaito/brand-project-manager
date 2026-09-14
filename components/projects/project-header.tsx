@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { formatDateRange } from "@/lib/format"
 import { PROJECT_STATUSES, projectStatusMeta, projectTypeLabel } from "@/lib/labels"
-import { useMember, useWorkspace } from "@/lib/store/workspace"
+import { useBasePath, useMember, useWorkspace } from "@/lib/store/workspace"
 import type { Project, ProjectStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +36,7 @@ export function ProjectHeader({ project }: { project: Project }) {
   const router = useRouter()
   const [editOpen, setEditOpen] = React.useState(false)
   const status = projectStatusMeta(project.status)
+  const base = useBasePath()
 
   return (
     <div>
@@ -51,7 +52,7 @@ export function ProjectHeader({ project }: { project: Project }) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
         <Link
-          href="/projects"
+          href={`${base}/projects`}
           className="absolute top-4 left-4 flex h-8 items-center gap-1.5 rounded-md bg-background/85 pr-3 pl-2 text-xs font-medium text-foreground ring-1 ring-foreground/10 backdrop-blur-sm transition-colors hover:bg-background"
         >
           <RiArrowLeftLine className="size-3.5" />
@@ -118,7 +119,7 @@ export function ProjectHeader({ project }: { project: Project }) {
                 variant="destructive"
                 onClick={() => {
                   actions.deleteProject(project.id)
-                  router.push("/projects")
+                  router.push(`${base}/projects`)
                 }}
               >
                 <RiDeleteBinLine />

@@ -28,6 +28,14 @@ export interface Member {
   initials: string
 }
 
+export interface Workspace {
+  id: ID
+  name: string
+  /** Hex colour for the workspace badge. */
+  color: string
+  initials: string
+}
+
 export interface Project {
   id: ID
   name: string
@@ -57,6 +65,8 @@ export interface Asset {
   extension: string
   /** Visual preview. Present for images and videos; optional otherwise. */
   previewUrl?: string
+  /** Object path in the storage bucket, when the file was uploaded. */
+  storagePath?: string
   width?: number
   height?: number
   /** Duration in seconds, for videos. */

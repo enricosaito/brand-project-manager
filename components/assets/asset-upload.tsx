@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { RiCheckLine, RiUploadCloud2Line } from "@remixicon/react"
+import { RiCheckLine, RiErrorWarningLine, RiUploadCloud2Line } from "@remixicon/react"
 
 import { Field } from "@/components/app/field"
 import { FormSelect } from "@/components/app/filter-select"
@@ -14,7 +14,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { UPLOAD_SAMPLES } from "@/data"
-import { useCurrentMember, useProjects, useWorkspace } from "@/lib/store/workspace"
+import {
+  newId,
+  useCurrentMember,
+  useProjects,
+  useStoreMode,
+  useWorkspace,
+  useWorkspaceId,
+} from "@/lib/store/workspace"
+import { createClient } from "@/lib/supabase/client"
+import {
+  assetObjectPath,
+  assetTypeFor,
+  extensionOf,
+  posterPathFor,
+  probeMedia,
+  uploadToBucket,
+} from "@/lib/supabase/storage"
+import { formatBytes } from "@/lib/format"
 import type { AssetInput } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -25,98 +42,169 @@ interface AssetUploadProps {
   projectId?: string
 }
 
+type Status = "queued" | "uploading" | "done" | "error"
+
 interface PendingFile {
   id: string
   name: string
-  progress: number
-  input: AssetInput
+  size: number
+  status: Status
+  error?: string
 }
 
+const CONCURRENCY = 3
+
 /**
- * Upload UI. No files leave the browser: dropping or "browsing" queues a few
- * sample images, animates their progress, then adds them to the workspace.
- * The shape of `AssetInput` is what a real upload endpoint would return.
+ * Upload dialog.
+ *
+ * Live mode: files go to Supabase Storage (with a generated poster frame for
+ * videos), then an asset row is created through the store.
+ * Demo mode: nothing leaves the browser; sample imagery stands in for files.
  */
 export function AssetUpload({ open, onOpenChange, projectId }: AssetUploadProps) {
   const projects = useProjects()
   const { actions } = useWorkspace()
+  const mode = useStoreMode()
+  const workspaceId = useWorkspaceId()
   const member = useCurrentMember()
   const [target, setTarget] = React.useState(projectId ?? projects[0]?.id ?? "")
   const [dragging, setDragging] = React.useState(false)
   const [queue, setQueue] = React.useState<PendingFile[]>([])
-  const [done, setDone] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     if (open) {
       setQueue([])
-      setDone(false)
       setTarget(projectId ?? projects[0]?.id ?? "")
     }
   }, [open, projectId, projects])
 
-  const uploading = queue.length > 0 && !done
+  const uploading = queue.some((f) => f.status === "queued" || f.status === "uploading")
+  const finished = queue.length > 0 && !uploading
 
-  function startMockUpload(count: number, names?: string[]) {
+  const patch = (id: string, changes: Partial<PendingFile>) =>
+    setQueue((q) => q.map((f) => (f.id === id ? { ...f, ...changes } : f)))
+
+  /* ---------------------------------------------------------------- live */
+  async function uploadOne(entry: PendingFile, file: File) {
+    patch(entry.id, { status: "uploading" })
+    try {
+      const supabase = createClient()
+      const type = assetTypeFor(file)
+      const ext = extensionOf(file.name)
+      const probe = await probeMedia(file, type)
+      const path = assetObjectPath(workspaceId, target, entry.id, ext)
+      const uploaded = await uploadToBucket(supabase, path, file, file.type || undefined)
+
+      let previewUrl: string | undefined
+      if (type === "image") previewUrl = uploaded.publicUrl
+      if (type === "video" && probe.poster) {
+        const poster = await uploadToBucket(supabase, posterPathFor(path), probe.poster, "image/jpeg")
+        previewUrl = poster.publicUrl
+      }
+
+      const input: AssetInput = {
+        projectId: target,
+        name: file.name,
+        type,
+        extension: ext,
+        previewUrl,
+        storagePath: uploaded.storagePath,
+        width: probe.width,
+        height: probe.height,
+        duration: probe.duration,
+        size: file.size,
+        uploadedById: member.id,
+        tags: [],
+      }
+      actions.addAsset(input)
+      patch(entry.id, { status: "done" })
+    } catch (err) {
+      patch(entry.id, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Upload failed",
+      })
+    }
+  }
+
+  async function uploadFiles(files: File[]) {
+    if (files.length === 0 || !target) return
+    const entries = files.map((file) => ({
+      id: newId(),
+      name: file.name,
+      size: file.size,
+      status: "queued" as Status,
+    }))
+    setQueue(entries)
+
+    // Simple concurrency limiter.
+    let next = 0
+    const workers = Array.from({ length: Math.min(CONCURRENCY, files.length) }, async () => {
+      while (next < files.length) {
+        const i = next++
+        await uploadOne(entries[i], files[i])
+      }
+    })
+    await Promise.all(workers)
+  }
+
+  /* ---------------------------------------------------------------- demo */
+  function mockUpload(count: number, names?: string[]) {
     const picked = [...UPLOAD_SAMPLES]
       .sort(() => Math.random() - 0.5)
       .slice(0, Math.max(1, Math.min(count, UPLOAD_SAMPLES.length)))
-
-    const pending: PendingFile[] = picked.map((sample, i) => ({
-      id: `${Date.now()}_${i}`,
+    const entries: PendingFile[] = picked.map((sample, i) => ({
+      id: newId(),
       name: names?.[i] ?? sample.name,
-      progress: 0,
-      input: {
-        projectId: target,
-        name: names?.[i] ?? sample.name,
-        type: "image",
-        extension: (names?.[i] ?? sample.name).split(".").pop()?.toLowerCase() ?? "jpg",
-        previewUrl: sample.url,
-        width: sample.width,
-        height: sample.height,
-        size: Math.round((2 + Math.random() * 7) * 1024 * 1024),
-        uploadedById: member.id,
-        tags: [],
-      },
+      size: Math.round((2 + Math.random() * 7) * 1024 * 1024),
+      status: "uploading",
     }))
-    setQueue(pending)
+    setQueue(entries)
+    entries.forEach((entry, i) => {
+      window.setTimeout(() => {
+        const sample = picked[i]
+        actions.addAsset({
+          projectId: target,
+          name: entry.name,
+          type: "image",
+          extension: extensionOf(entry.name) || "jpg",
+          previewUrl: sample.url,
+          width: sample.width,
+          height: sample.height,
+          size: entry.size,
+          uploadedById: member.id,
+          tags: [],
+        })
+        patch(entry.id, { status: "done" })
+      }, 700 + i * 350)
+    })
+  }
 
-    // Animate progress, then commit.
-    const started = performance.now()
-    const duration = 1100 + pending.length * 250
-    const tick = () => {
-      const t = Math.min(1, (performance.now() - started) / duration)
-      setQueue((q) =>
-        q.map((f, i) => ({
-          ...f,
-          progress: Math.min(100, Math.round(100 * Math.min(1, t * 1.15 - i * 0.05))),
-        }))
-      )
-      if (t < 1) {
-        requestAnimationFrame(tick)
-      } else {
-        pending.forEach((f) => actions.addAsset(f.input))
-        setDone(true)
-        window.setTimeout(() => onOpenChange(false), 900)
-      }
-    }
-    requestAnimationFrame(tick)
+  /* ------------------------------------------------------------- handlers */
+  function handleFiles(files: File[]) {
+    if (uploading || files.length === 0) return
+    if (mode === "live") void uploadFiles(files)
+    else mockUpload(files.length, files.map((f) => f.name))
   }
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragging(false)
-    if (uploading) return
-    const files = Array.from(e.dataTransfer.files)
-    startMockUpload(files.length || 2, files.map((f) => f.name))
+    handleFiles(Array.from(e.dataTransfer.files))
   }
 
   function onBrowse(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    if (files.length === 0) return
-    startMockUpload(files.length, files.map((f) => f.name))
+    handleFiles(Array.from(e.target.files ?? []))
     e.target.value = ""
   }
+
+  React.useEffect(() => {
+    if (!finished) return
+    if (queue.every((f) => f.status === "done")) {
+      const t = window.setTimeout(() => onOpenChange(false), 800)
+      return () => window.clearTimeout(t)
+    }
+  }, [finished, queue, onOpenChange])
 
   return (
     <Dialog open={open} onOpenChange={(o) => !uploading && onOpenChange(o)}>
@@ -124,8 +212,9 @@ export function AssetUpload({ open, onOpenChange, projectId }: AssetUploadProps)
         <DialogHeader>
           <DialogTitle className="text-title">Upload assets</DialogTitle>
           <DialogDescription>
-            Images, videos, documents and design files. This prototype simulates
-            the upload with sample imagery.
+            {mode === "live"
+              ? "Images, videos, documents and design files, up to 500 MB each."
+              : "Demo mode simulates the upload with sample imagery."}
           </DialogDescription>
         </DialogHeader>
 
@@ -165,9 +254,7 @@ export function AssetUpload({ open, onOpenChange, projectId }: AssetUploadProps)
               <RiUploadCloud2Line className="size-5" />
             </div>
             <div>
-              <p className="text-sm font-medium">
-                {dragging ? "Drop to upload" : "Drag files here"}
-              </p>
+              <p className="text-sm font-medium">{dragging ? "Drop to upload" : "Drag files here"}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 or{" "}
                 <button
@@ -179,45 +266,34 @@ export function AssetUpload({ open, onOpenChange, projectId }: AssetUploadProps)
                 </button>
               </p>
             </div>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={onBrowse}
-            />
+            <input ref={inputRef} type="file" multiple className="hidden" onChange={onBrowse} />
           </div>
         ) : (
           <ul className="flex flex-col gap-3 rounded-xl bg-surface p-4 ring-1 ring-foreground/5">
             {queue.map((file) => (
               <li key={file.id} className="flex items-center gap-3">
-                <div
-                  className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
-                    file.progress >= 100
-                      ? "bg-success text-white"
-                      : "bg-secondary text-muted-foreground"
-                  )}
-                >
-                  {file.progress >= 100 ? (
-                    <RiCheckLine className="size-3.5 animate-in zoom-in-50 duration-200" />
-                  ) : (
-                    <span className="size-1.5 rounded-full bg-current" />
-                  )}
-                </div>
+                <StatusIcon status={file.status} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="truncate text-sm">{file.name}</span>
-                    <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-                      {file.progress}%
+                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+                      {formatBytes(file.size)}
                     </span>
                   </div>
-                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-foreground/10">
-                    <div
-                      className="h-full rounded-full bg-foreground/70 transition-[width] duration-100 ease-linear"
-                      style={{ width: `${file.progress}%` }}
-                    />
-                  </div>
+                  {file.status === "error" ? (
+                    <p className="mt-1 text-xs text-destructive">{file.error}</p>
+                  ) : (
+                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-foreground/10">
+                      <div
+                        className={cn(
+                          "h-full rounded-full bg-foreground/70 transition-[width] duration-500 ease-out-quart",
+                          file.status === "queued" && "w-0",
+                          file.status === "uploading" && "w-2/3 animate-pulse",
+                          file.status === "done" && "w-full"
+                        )}
+                      />
+                    </div>
+                  )}
                 </div>
               </li>
             ))}
@@ -229,12 +305,47 @@ export function AssetUpload({ open, onOpenChange, projectId }: AssetUploadProps)
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={() => startMockUpload(3)} disabled={!target}>
-              Add sample files
+            {mode === "demo" ? (
+              <Button onClick={() => mockUpload(3)} disabled={!target}>
+                Add sample files
+              </Button>
+            ) : (
+              <Button onClick={() => inputRef.current?.click()} disabled={!target}>
+                Choose files
+              </Button>
+            )}
+          </div>
+        )}
+
+        {finished && queue.some((f) => f.status === "error") && (
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
             </Button>
           </div>
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function StatusIcon({ status }: { status: Status }) {
+  return (
+    <div
+      className={cn(
+        "flex size-6 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
+        status === "done" && "bg-success text-white",
+        status === "error" && "bg-destructive/10 text-destructive",
+        (status === "queued" || status === "uploading") && "bg-secondary text-muted-foreground"
+      )}
+    >
+      {status === "done" ? (
+        <RiCheckLine className="size-3.5 animate-in zoom-in-50 duration-200" />
+      ) : status === "error" ? (
+        <RiErrorWarningLine className="size-3.5" />
+      ) : (
+        <span className={cn("size-1.5 rounded-full bg-current", status === "uploading" && "animate-pulse")} />
+      )}
+    </div>
   )
 }

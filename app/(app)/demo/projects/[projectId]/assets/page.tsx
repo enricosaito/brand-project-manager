@@ -1,5 +1,9 @@
 import { ProjectAssetsPage } from "@/components/projects/project-pages"
 
-export default function Page({ params }: { params: Promise<{ projectId: string }> }) {
+export default function DemoProjectAssets({
+  params,
+}: {
+  params: Promise<{ projectId: string }>
+}) {
   return <ProjectAssetsPage params={params} />
 }

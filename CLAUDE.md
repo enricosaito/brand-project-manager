@@ -1,8 +1,8 @@
 # Marcados — project instructions
 
-Marcados is a creative workspace for brand teams: projects → assets, tasks,
-activity. Auth is real (Supabase). Projects/assets/tasks/activity are still
-local mock data behind a store that is designed to be swapped for a database.
+Marcados is a creative workspace for brand teams: workspaces → projects →
+assets, tasks, activity. Auth, data and file storage run on Supabase. The
+original mock dataset is kept alive under `/demo` as a design reference.
 Read `README.md` for the product overview and `AGENTS.md` for the Next.js
 version warning (this Next 16 differs from older training data; check
 `node_modules/next/dist/docs/` before using an API you are unsure of).
@@ -28,29 +28,44 @@ eslint-config-next). Don't spend time on it; rely on typecheck + build.
 ## Architecture
 
 ```
-app/(auth)/login        sign in / sign up page + server actions (actions.ts)
-app/auth/callback       completes Supabase email links
-app/(app)/              authenticated shell; layout.tsx loads the user server-side
-  projects, projects/[projectId]/{,assets,tasks,activity}, assets
-components/app          shell + shared primitives (sidebar, page-header, empty-state, field, filter-select…)
-components/{projects,assets,tasks,activity,auth}
-components/ui           shadcn primitives (generated; radii were reduced on purpose)
-data/                   mock data only — nothing else may import it except the store
-lib/types.ts            domain entities (Project, Asset, Task, ActivityEvent, Member)
-lib/store/workspace.tsx THE seam: reducer + selector hooks + actions
-lib/labels.ts           enum labels + status dot colours
-lib/format.ts           dates, bytes, relative time, ids
-lib/supabase/           client.ts (browser), server.ts (RSC/actions/routes), proxy.ts (session refresh)
-proxy.ts                Next 16 "proxy" (renamed middleware): session refresh + auth redirects
+app/(auth)/login          sign in / sign up page + server actions (actions.ts)
+app/auth/callback         completes Supabase email links
+app/(app)/layout.tsx      auth gate → resolves workspaces → loads a WorkspaceSnapshot
+                          → <WorkspaceProvider mode="live"> + AppShell
+app/(app)/projects, assets, projects/[projectId]/{,assets,tasks,activity}
+                          thin route files; bodies live in components/*-page(s).tsx
+app/(app)/demo/**         same routes, wrapped in <WorkspaceProvider mode="demo">
+                          seeded from data/snapshot.ts (nested provider wins)
+app/(app)/workspace-actions.ts  switchWorkspace, createWorkspace, seedSampleData
+components/app            shell + shared primitives (sidebar, page-header, empty-state, field, filter-select…)
+components/{projects,assets,tasks,activity,auth,workspace}
+components/ui             shadcn primitives (generated; radii were reduced on purpose)
+data/                     mock dataset — only the demo snapshot and seedSampleData import it
+lib/types.ts              domain entities (Workspace, Member, Project, Asset, Task, ActivityEvent)
+lib/store/workspace.tsx   THE seam: reducer + selector hooks + actions; live mode persists
+                          through lib/supabase/repo.ts with optimistic update + rollback
+lib/supabase/rows.ts      DB row types + mappers (the only place that knows column names)
+lib/supabase/queries.ts   server: workspace resolution (cookie), snapshot loading
+lib/supabase/repo.ts      browser: inserts/updates/deletes used by the store
+lib/supabase/storage.ts   browser: uploads, media probing (dimensions, video poster), object paths
+lib/supabase/{client,server,proxy}.ts  clients per context
+supabase/migrations/      schema + RLS + storage policies (apply with SQL editor or `supabase db push`)
+proxy.ts                  Next 16 "proxy" (renamed middleware): session refresh + auth redirects
 ```
 
 Rules that keep this maintainable:
 
 - Components read data through hooks (`useProjects`, `useAssets(projectId)`,
   `useTasks`, `useActivity`, `useProjectStats`) and mutate through
-  `useWorkspace().actions`. Never import `data/` in a component.
-- When the database arrives, replace the internals of `lib/store/workspace.tsx`
-  and keep the hook signatures and `lib/types.ts` shapes unchanged.
+  `useWorkspace().actions`. Components never call Supabase for data; only the
+  store (`repo.ts`) and upload UI (`storage.ts`) talk to it in the browser.
+- Links inside store-backed pages must use `useBasePath()` so they work under
+  `/demo` too.
+- Column names stay inside `lib/supabase/rows.ts`; schema changes = new file in
+  `supabase/migrations/` + mapper update + `lib/types.ts` if the UI shape changes.
+- RLS is the security boundary: every content table is guarded by
+  `is_workspace_member(workspace_id)`. New tables must carry `workspace_id`
+  and the same policy pair. Storage objects live under `<workspace_id>/...`.
 - One asset UI system: `components/assets/asset-library.tsx` serves both the
   project tab and the global library. Do not fork it.
 - Project detail tabs are nested routes, not client tabs. Keep them deep-linkable.
@@ -59,6 +74,9 @@ Rules that keep this maintainable:
 - Supabase: create a new server client per request; never share across requests.
   The proxy's `getUser()` call is what refreshes sessions, don't move logic
   between client creation and that call.
+- The `(app)` layout wraps everything (including `/demo`) in the live provider
+  because moving route folders while `next dev` runs fails on Windows. A
+  `(live)` route group is the intended cleanup once the dev server is stopped.
 
 ## Design rules (this is a premium creative tool, not SaaS)
 
@@ -92,8 +110,22 @@ Rules that keep this maintainable:
   `data/images.ts` / `data/assets.ts` unless you have looked at the new one.
 - Supabase rejects `example.com` sign-ups; use a Gmail plus-alias of the
   owner's address for QA. Email confirmation is enabled on the project.
+- The Supabase CLI login on this machine does NOT have access to the Marcados
+  project, so `supabase link` / `db push` fail. Apply migrations through the
+  dashboard SQL editor (the app shows a "Database not set up" screen until
+  then). `supabase start` works locally when Docker Desktop is running and
+  applies `supabase/migrations/` automatically.
 - Windows: the shell is Git Bash. Prefer the Read/Edit/Write tools for TSX;
   `sed` is fine for simple renames.
+- Local verification loop: start Docker Desktop, `supabase start`, then
+  `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<local> npx next build && npx next start -p 3111`
+  (shell env beats `.env.local`; `next start` avoids the dev-server lock).
+  `next.config.ts` enables `images.dangerouslyAllowLocalIP` only when the
+  Supabase host is local, because the optimizer blocks private IPs.
+- RLS policies alone are not enough: tables need `grant … to authenticated`
+  or PostgREST answers 42501. The initial migration includes the grants.
+- In screenshot scripts, tab labels include counts ("Tasks 4") and the sidebar
+  has an "Assets" link too — click tabs by `a[href$='/tasks']`, not by text.
 
 ## Verifying UI work
 
@@ -119,9 +151,10 @@ tablet (900px) and phone (420px).
 
 ## Roadmap (agreed order)
 
-1. Database schema + RLS (workspaces, memberships, projects, assets, tasks, activity)
-2. Replace the mock store internals with Supabase queries/mutations
-3. Real uploads via Supabase Storage (+ thumbnails/posters)
-4. Workspaces, members, invitations
+1. ~~Database schema + RLS~~ (done: `supabase/migrations/20260914000000_initial.sql`)
+2. ~~Supabase-backed store~~ (done: snapshot on load, optimistic writes + rollback)
+3. ~~Real uploads via Storage~~ (done: public `assets` bucket, browser-side video posters)
+4. Workspaces: rename/colour, members list, invitations by email, roles in RLS
 5. Auth polish: password reset, Google sign-in, account settings
-6. AI Studio: auto-tagging and semantic asset search first
+6. Data loading beyond one snapshot: per-page queries, pagination, realtime
+7. AI Studio: auto-tagging and semantic asset search first

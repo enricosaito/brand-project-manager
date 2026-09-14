@@ -7,7 +7,7 @@ import { FadeImage } from "@/components/app/fade-image"
 import { ProjectStatusBadge } from "@/components/app/status-badge"
 import { formatRelative, pluralize } from "@/lib/format"
 import { projectTypeLabel } from "@/lib/labels"
-import { useProjectStats } from "@/lib/store/workspace"
+import { useBasePath, useProjectStats } from "@/lib/store/workspace"
 import type { Project } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -24,10 +24,11 @@ export function ProjectCard({
   sizes = "(min-width: 1280px) 30vw, (min-width: 640px) 45vw, 100vw",
 }: ProjectCardProps) {
   const stats = useProjectStats(project.id)
+  const base = useBasePath()
 
   return (
     <Link
-      href={`/projects/${project.id}`}
+      href={`${base}/projects/${project.id}`}
       className={cn(
         "group/card block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/30",
         className
@@ -63,12 +64,12 @@ export function ProjectCard({
         </p>
 
         <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
-          <ProgressMeter value={stats.progress} />
+          <ProgressMeter value={stats.progress} className="shrink-0" />
           <span className="text-foreground/40">·</span>
-          <span className="tabular-nums">{pluralize(stats.assetCount, "asset")}</span>
+          <span className="shrink-0 whitespace-nowrap tabular-nums">{pluralize(stats.assetCount, "asset")}</span>
           <span className="text-foreground/40">·</span>
-          <span className="tabular-nums">{pluralize(stats.taskCount, "task")}</span>
-          <span className="ml-auto truncate opacity-0 transition-opacity duration-200 group-hover/card:opacity-100">
+          <span className="shrink-0 whitespace-nowrap tabular-nums">{pluralize(stats.taskCount, "task")}</span>
+          <span className="ml-auto min-w-0 truncate opacity-0 transition-opacity duration-200 group-hover/card:opacity-100">
             Updated {formatRelative(project.updatedAt)}
           </span>
         </div>

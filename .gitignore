@@ -37,3 +37,7 @@ next-env.d.ts
 
 # keep the example env file
 !.env.example
+
+# supabase local stack
+supabase/.temp
+supabase/.branches

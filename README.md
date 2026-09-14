@@ -1,9 +1,8 @@
 # Marcados — Brand Workspace
 
-A creative workspace for brand projects and their assets. Authentication runs
-on Supabase; projects, assets, tasks and activity still run on local mock data
-so the product concept, information architecture and visual language could be
-established before the data layer is introduced.
+A creative workspace for brand projects and their assets. Authentication,
+data and file storage run on Supabase. The original mock dataset that shaped
+the design lives on under `/demo` as a reference workspace.
 
 ## Stack
 
@@ -19,16 +18,32 @@ npm run build
 
 Press <kbd>d</kbd> anywhere to toggle dark mode.
 
-## Authentication (Supabase)
-
-Email + password auth via Supabase, using `@supabase/ssr` cookies.
+## Supabase setup
 
 1. Copy `.env.example` to `.env.local` and fill in the project URL and
    publishable key (Supabase → Project Settings → API).
-2. In Supabase → Authentication → URL Configuration set **Site URL** to your
+2. Apply the schema: paste `supabase/migrations/20260914000000_initial.sql`
+   into the SQL editor and run it (or `supabase link` + `supabase db push`).
+   It creates the tables, RLS policies, the `create_workspace` function and
+   the public `assets` storage bucket.
+3. In Supabase → Authentication → URL Configuration set **Site URL** to your
    app origin and add `<origin>/auth/callback` to **Redirect URLs** (do this
    for `http://localhost:3000` and the production domain).
-3. Add the same two env vars to the Vercel project before deploying.
+4. Add the same two env vars to the Vercel project before deploying.
+
+For a local stack: `supabase start` (needs Docker) applies the migrations and
+prints local URL/keys you can put in `.env.local`.
+
+## Data model
+
+`workspaces` ⟶ `workspace_members` (profiles) ⟶ `projects` ⟶ `assets`, `tasks`,
+`activity_events`. Every content row carries `workspace_id`; RLS lets any
+member of that workspace read and write it. A first workspace is created for
+each user on first visit; the active one is remembered in a cookie.
+
+On each request the app layout loads one snapshot of the active workspace and
+hands it to the client store. Mutations update the UI immediately, persist via
+the browser client, and roll back if the write fails.
 
 How it fits together:
 

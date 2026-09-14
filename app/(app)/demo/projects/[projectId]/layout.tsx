@@ -1,6 +1,6 @@
 import { ProjectDetailLayout } from "@/components/projects/project-detail-layout"
 
-export default function ProjectLayout({
+export default function DemoProjectLayout({
   children,
   params,
 }: {
