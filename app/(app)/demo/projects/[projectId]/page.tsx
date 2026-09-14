@@ -1,5 +1,9 @@
 import { ProjectOverviewPage } from "@/components/projects/project-pages"
 
-export default function Page({ params }: { params: Promise<{ projectId: string }> }) {
+export default function DemoProjectOverview({
+  params,
+}: {
+  params: Promise<{ projectId: string }>
+}) {
   return <ProjectOverviewPage params={params} />
 }

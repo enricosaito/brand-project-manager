@@ -4,9 +4,11 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  RiAddLine,
   RiArrowDownSLine,
   RiBookOpenLine,
   RiCheckLine,
+  RiFlaskLine,
   RiFolder3Line,
   RiImage2Line,
   RiLogoutBoxRLine,
@@ -18,7 +20,9 @@ import {
 import { useTheme } from "next-themes"
 
 import { signOut } from "@/app/(auth)/login/actions"
+import { switchWorkspace } from "@/app/(app)/workspace-actions"
 import { Logo } from "@/components/app/logo"
+import { CreateWorkspaceDialog } from "@/components/workspace/create-workspace-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -31,17 +35,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { AuthUser } from "@/lib/auth"
+import type { Workspace } from "@/lib/types"
 import { cn } from "@/lib/utils"
-
-const WORKSPACES = [
-  { id: "silva", name: "Silva Gym", initials: "SG", color: "#F2460D" },
-  { id: "personal", name: "Personal", initials: "P", color: "#1F1BE4" },
-]
-
-const NAV = [
-  { href: "/projects", label: "Projects", icon: RiFolder3Line },
-  { href: "/assets", label: "Assets", icon: RiImage2Line },
-]
 
 const FUTURE = [
   { label: "AI Studio", icon: RiSparklingLine },
@@ -50,6 +45,8 @@ const FUTURE = [
 
 interface SidebarProps {
   user: AuthUser
+  workspaces: Workspace[]
+  currentWorkspaceId: string
   /** Icon-only rail for medium widths. */
   collapsed?: boolean
   /** Called after navigation, used to close the mobile sheet. */
@@ -59,11 +56,20 @@ interface SidebarProps {
 
 export function Sidebar({
   user,
+  workspaces,
+  currentWorkspaceId,
   collapsed = false,
   onNavigate,
   className,
 }: SidebarProps) {
   const pathname = usePathname()
+  const inDemo = pathname === "/demo" || pathname.startsWith("/demo/")
+  const base = inDemo ? "/demo" : ""
+
+  const nav = [
+    { href: `${base}/projects`, label: "Projects", icon: RiFolder3Line },
+    { href: `${base}/assets`, label: "Assets", icon: RiImage2Line },
+  ]
 
   return (
     <div
@@ -74,12 +80,7 @@ export function Sidebar({
       )}
     >
       {/* Brand */}
-      <div
-        className={cn(
-          "flex h-14 shrink-0 items-center",
-          collapsed ? "justify-center" : "px-2"
-        )}
-      >
+      <div className={cn("flex h-14 shrink-0 items-center", collapsed ? "justify-center" : "px-2")}>
         <Link
           href="/projects"
           onClick={onNavigate}
@@ -87,20 +88,20 @@ export function Sidebar({
         >
           <Logo />
           {!collapsed && (
-            <span className="font-heading text-[15px] font-medium tracking-tight">
-              Marcados
-            </span>
+            <span className="font-heading text-[15px] font-medium tracking-tight">Marcados</span>
           )}
         </Link>
       </div>
 
-      {/* Workspace switcher */}
-      <WorkspaceSwitcher collapsed={collapsed} />
+      <WorkspaceSwitcher
+        workspaces={workspaces}
+        currentWorkspaceId={currentWorkspaceId}
+        collapsed={collapsed}
+      />
 
-      {/* Navigation */}
       <nav className="mt-6 flex flex-1 flex-col gap-6">
         <NavGroup label="Workspace" collapsed={collapsed}>
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <NavItem
@@ -116,20 +117,24 @@ export function Sidebar({
           })}
         </NavGroup>
 
+        <NavGroup label="Reference" collapsed={collapsed}>
+          <NavItem
+            href="/demo/projects"
+            label="Demo data"
+            icon={RiFlaskLine}
+            active={inDemo}
+            collapsed={collapsed}
+            onClick={onNavigate}
+          />
+        </NavGroup>
+
         <NavGroup label="Future" collapsed={collapsed}>
           {FUTURE.map((item) => (
-            <NavItem
-              key={item.label}
-              label={item.label}
-              icon={item.icon}
-              collapsed={collapsed}
-              disabled
-            />
+            <NavItem key={item.label} label={item.label} icon={item.icon} collapsed={collapsed} disabled />
           ))}
         </NavGroup>
       </nav>
 
-      {/* Footer */}
       <SidebarFooter user={user} collapsed={collapsed} />
     </div>
   )
@@ -166,15 +171,7 @@ interface NavItemProps {
   onClick?: () => void
 }
 
-function NavItem({
-  href,
-  label,
-  icon: Icon,
-  active,
-  disabled,
-  collapsed,
-  onClick,
-}: NavItemProps) {
+function NavItem({ href, label, icon: Icon, active, disabled, collapsed, onClick }: NavItemProps) {
   const base = cn(
     "group/nav relative flex h-8 items-center gap-2.5 rounded-md text-[13px] outline-none transition-colors duration-150",
     collapsed ? "w-9 justify-center" : "px-2.5",
@@ -227,54 +224,79 @@ function NavItem({
   )
 }
 
-function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
-  const [current, setCurrent] = React.useState(WORKSPACES[0])
+function WorkspaceBadge({ workspace, className }: { workspace: Workspace; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "flex size-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white",
+        className
+      )}
+      style={{ backgroundColor: workspace.color }}
+    >
+      {workspace.initials}
+    </span>
+  )
+}
+
+function WorkspaceSwitcher({
+  workspaces,
+  currentWorkspaceId,
+  collapsed,
+}: {
+  workspaces: Workspace[]
+  currentWorkspaceId: string
+  collapsed: boolean
+}) {
+  const current = workspaces.find((w) => w.id === currentWorkspaceId) ?? workspaces[0]
+  const [createOpen, setCreateOpen] = React.useState(false)
+  const [pending, startTransition] = React.useTransition()
+
+  if (!current) return null
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(
-          "flex h-9 items-center gap-2.5 rounded-md text-left text-[13px] outline-none transition-colors hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/30 aria-expanded:bg-sidebar-accent",
-          collapsed ? "w-9 justify-center" : "w-full px-2"
-        )}
-      >
-        <span
-          className="flex size-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white"
-          style={{ backgroundColor: current.color }}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            "flex h-9 items-center gap-2.5 rounded-md text-left text-[13px] outline-none transition-colors hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/30 aria-expanded:bg-sidebar-accent",
+            collapsed ? "w-9 justify-center" : "w-full px-2",
+            pending && "opacity-60"
+          )}
         >
-          {current.initials}
-        </span>
-        {!collapsed && (
-          <>
-            <span className="min-w-0 flex-1 truncate font-medium">{current.name}</span>
-            <RiArrowDownSLine className="size-4 text-muted-foreground" />
-          </>
-        )}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        side={collapsed ? "right" : "bottom"}
-        className="w-56"
-      >
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-          {WORKSPACES.map((ws) => (
-            <DropdownMenuItem key={ws.id} onClick={() => setCurrent(ws)}>
-              <span
-                className="flex size-5 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white"
-                style={{ backgroundColor: ws.color }}
+          <WorkspaceBadge workspace={current} />
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1 truncate font-medium">{current.name}</span>
+              <RiArrowDownSLine className="size-4 text-muted-foreground" />
+            </>
+          )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side={collapsed ? "right" : "bottom"} className="w-60">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+            {workspaces.map((ws) => (
+              <DropdownMenuItem
+                key={ws.id}
+                onClick={() => {
+                  if (ws.id === current.id) return
+                  startTransition(() => switchWorkspace(ws.id))
+                }}
               >
-                {ws.initials}
-              </span>
-              <span className="flex-1">{ws.name}</span>
-              {ws.id === current.id && <RiCheckLine className="text-muted-foreground" />}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>Create workspace</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+                <WorkspaceBadge workspace={ws} />
+                <span className="flex-1 truncate">{ws.name}</span>
+                {ws.id === current.id && <RiCheckLine className="text-muted-foreground" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+            <RiAddLine />
+            Create workspace
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <CreateWorkspaceDialog open={createOpen} onOpenChange={setCreateOpen} />
+    </>
   )
 }
 
@@ -306,12 +328,7 @@ function SidebarFooter({ user, collapsed }: { user: AuthUser; collapsed: boolean
             </div>
           )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          side={collapsed ? "right" : "top"}
-          sideOffset={8}
-          className="w-60"
-        >
+        <DropdownMenuContent align="start" side={collapsed ? "right" : "top"} sideOffset={8} className="w-60">
           <DropdownMenuGroup>
             <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
             <DropdownMenuItem disabled>

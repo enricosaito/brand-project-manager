@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import type { AuthUser } from "@/lib/auth"
+import type { Workspace } from "@/lib/types"
 
 /**
  * Application frame.
@@ -21,10 +22,15 @@ import type { AuthUser } from "@/lib/auth"
 export function AppShell({
   children,
   user,
+  workspaces,
+  currentWorkspaceId,
 }: {
   children: React.ReactNode
   user: AuthUser
+  workspaces: Workspace[]
+  currentWorkspaceId: string
 }) {
+  const sidebarProps = { user, workspaces, currentWorkspaceId }
   const isDesktop = useMediaQuery("(min-width: 1024px)")
   const isTablet = useMediaQuery("(min-width: 768px)")
   const [mobileOpen, setMobileOpen] = React.useState(false)
@@ -39,7 +45,7 @@ export function AppShell({
     <div className="flex min-h-svh w-full bg-background">
       {/* Sidebar (tablet and up) */}
       <aside className="sticky top-0 hidden h-svh shrink-0 border-r border-sidebar-border md:block">
-        <Sidebar user={user} collapsed={isTablet && !isDesktop} />
+        <Sidebar {...sidebarProps} collapsed={isTablet && !isDesktop} />
       </aside>
 
       {/* Mobile top bar */}
@@ -50,7 +56,7 @@ export function AppShell({
           className="w-64 border-r-0 bg-sidebar p-0 sm:max-w-64"
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <Sidebar user={user} onNavigate={() => setMobileOpen(false)} />
+          <Sidebar {...sidebarProps} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 

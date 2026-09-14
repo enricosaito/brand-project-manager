@@ -17,6 +17,7 @@ import {
   useActivity,
   useAsset,
   useAssets,
+  useBasePath,
   useMember,
   useProjectStats,
   useTasks,
@@ -29,7 +30,7 @@ export function ProjectOverview({ project }: { project: Project }) {
   const tasks = useTasks(project.id)
   const activity = useActivity(project.id)
   const stats = useProjectStats(project.id)
-  const base = `/projects/${project.id}`
+  const base = `${useBasePath()}/projects/${project.id}`
 
   const [previewId, setPreviewId] = React.useState<string | null>(null)
   const previewAsset = useAsset(previewId) ?? null

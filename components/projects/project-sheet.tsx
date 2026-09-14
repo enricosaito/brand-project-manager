@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { RiCheckLine, RiUploadCloud2Line } from "@remixicon/react"
+import { RiCheckLine, RiLoader4Line, RiUploadCloud2Line } from "@remixicon/react"
 
 import { FadeImage } from "@/components/app/fade-image"
 import { Field } from "@/components/app/field"
@@ -20,7 +20,15 @@ import { Textarea } from "@/components/ui/textarea"
 import { COVER_OPTIONS, UPLOAD_SAMPLES } from "@/data"
 import { todayISO } from "@/lib/format"
 import { PROJECT_STATUSES, PROJECT_TYPES } from "@/lib/labels"
-import { useCurrentMember, useWorkspace } from "@/lib/store/workspace"
+import {
+  newId,
+  useCurrentMember,
+  useStoreMode,
+  useWorkspace,
+  useWorkspaceId,
+} from "@/lib/store/workspace"
+import { createClient } from "@/lib/supabase/client"
+import { coverObjectPath, extensionOf, uploadToBucket } from "@/lib/supabase/storage"
 import type { Project, ProjectInput, ProjectStatus, ProjectType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -220,13 +228,38 @@ function CoverPicker({
   value: string
   onChange: (url: string) => void
 }) {
+  const mode = useStoreMode()
+  const workspaceId = useWorkspaceId()
   const [custom, setCustom] = React.useState<string | null>(null)
+  const [uploading, setUploading] = React.useState(false)
+  const [uploadError, setUploadError] = React.useState<string | null>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
 
-  // Mock upload: pick a sample image that is not already a preset.
+  // Demo mode: pick a sample image instead of uploading.
   function mockUpload() {
     const sample = UPLOAD_SAMPLES[Math.floor(Math.random() * UPLOAD_SAMPLES.length)]
     setCustom(sample.url)
     onChange(sample.url)
+  }
+
+  async function uploadCover(file: File) {
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const path = coverObjectPath(workspaceId, newId(), extensionOf(file.name))
+      const { publicUrl } = await uploadToBucket(createClient(), path, file, file.type || undefined)
+      setCustom(publicUrl)
+      onChange(publicUrl)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function pickCustom() {
+    if (mode === "live") inputRef.current?.click()
+    else mockUpload()
   }
 
   const options = custom
@@ -268,12 +301,31 @@ function CoverPicker({
       })}
       <button
         type="button"
-        onClick={mockUpload}
-        className="flex aspect-[4/3] flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-muted-foreground transition-colors outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+        onClick={pickCustom}
+        disabled={uploading}
+        className="flex aspect-[4/3] flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-muted-foreground transition-colors outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 disabled:opacity-60"
       >
-        <RiUploadCloud2Line className="size-4" />
-        <span className="text-[11px]">Upload</span>
+        {uploading ? (
+          <RiLoader4Line className="size-4 animate-spin" />
+        ) : (
+          <RiUploadCloud2Line className="size-4" />
+        )}
+        <span className="text-[11px]">{uploading ? "Uploading" : "Upload"}</span>
       </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) void uploadCover(file)
+          e.target.value = ""
+        }}
+      />
+      {uploadError && (
+        <p className="col-span-4 text-xs text-destructive">{uploadError}</p>
+      )}
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { useBasePath } from "@/lib/store/workspace"
 import { cn } from "@/lib/utils"
 
 interface ProjectTabsProps {
@@ -16,7 +17,7 @@ interface ProjectTabsProps {
  */
 export function ProjectTabs({ projectId, counts }: ProjectTabsProps) {
   const pathname = usePathname()
-  const base = `/projects/${projectId}`
+  const base = `${useBasePath()}/projects/${projectId}`
 
   const tabs = [
     { href: base, label: "Overview", exact: true },
