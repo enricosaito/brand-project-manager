@@ -1,15 +1,14 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import { RiArrowLeftLine, RiDownloadLine, RiImageAddLine, RiRefreshLine } from "@remixicon/react"
+import { RiDownloadLine, RiImageAddLine, RiRefreshLine } from "@remixicon/react"
 
 import { PageContainer } from "@/components/app/app-shell"
 import { SaveToProjectButton } from "@/components/tools/save-to-project"
 import { Button } from "@/components/ui/button"
 import { formatBytes } from "@/lib/format"
 import { downloadBlob, percentSaved } from "@/lib/tools/image"
-import { getTool, TOOLS, type ToolSlug } from "@/lib/tools/registry"
+import { getTool, type ToolSlug } from "@/lib/tools/registry"
 import { cn } from "@/lib/utils"
 
 /* ------------------------------------------------------------------ page */
@@ -19,52 +18,19 @@ export function ToolPage({ slug, children }: { slug: ToolSlug; children: React.R
   if (!tool) return null
   return (
     <PageContainer>
-      <div className="flex flex-col gap-6">
-        <Link
-          href="/tools"
-          className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <RiArrowLeftLine className="size-3.5" />
-          All tools
-        </Link>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-display text-balance">{tool.name}</h1>
-            <p className="mt-2 max-w-xl text-[15px] text-pretty text-muted-foreground">
-              {tool.description}
-            </p>
-          </div>
-          <ToolSwitcher current={slug} />
+      <div className="flex items-start gap-4">
+        <span className="mt-1 hidden size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground/80 sm:flex">
+          <tool.icon className="size-5" />
+        </span>
+        <div>
+          <h1 className="text-display text-balance">{tool.name}</h1>
+          <p className="mt-2 max-w-xl text-[15px] text-pretty text-muted-foreground">
+            {tool.description}
+          </p>
         </div>
       </div>
       <div className="mt-8">{children}</div>
     </PageContainer>
-  )
-}
-
-function ToolSwitcher({ current }: { current: ToolSlug }) {
-  return (
-    <nav aria-label="Other tools" className="scrollbar-thin -mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-      {TOOLS.map((t) => {
-        const active = t.slug === current
-        return (
-          <Link
-            key={t.slug}
-            href={`/tools/${t.slug}`}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors",
-              active
-                ? "bg-foreground text-background"
-                : "bg-secondary text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
-            )}
-          >
-            <t.icon className="size-3.5" />
-            {t.short}
-          </Link>
-        )
-      })}
-    </nav>
   )
 }
 
