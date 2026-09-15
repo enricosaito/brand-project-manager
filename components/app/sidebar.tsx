@@ -15,7 +15,6 @@ import {
   RiMoonLine,
   RiSparklingLine,
   RiSunLine,
-  RiToolsLine,
   RiUser3Line,
 } from "@remixicon/react"
 import { useTheme } from "next-themes"
@@ -36,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { AuthUser } from "@/lib/auth"
+import { TOOLS } from "@/lib/tools/registry"
 import type { Workspace } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -73,7 +73,6 @@ export function Sidebar({
   const nav = [
     { href: `${base}/projects`, label: "Projects", icon: RiFolder3Line },
     { href: `${base}/assets`, label: "Assets", icon: RiImage2Line },
-    { href: "/tools", label: "Tools", icon: RiToolsLine },
   ]
 
   return (
@@ -106,7 +105,12 @@ export function Sidebar({
         />
       )}
 
-      <nav className={cn("flex flex-1 flex-col gap-6", SHOW_WORKSPACE_SWITCHER ? "mt-6" : "mt-2")}>
+      <nav
+        className={cn(
+          "scrollbar-thin -mx-1 flex flex-1 flex-col gap-6 overflow-y-auto px-1 pb-4",
+          SHOW_WORKSPACE_SWITCHER ? "mt-6" : "mt-2"
+        )}
+      >
         <NavGroup label="Workspace" collapsed={collapsed}>
           {nav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -117,6 +121,23 @@ export function Sidebar({
                 label={item.label}
                 icon={item.icon}
                 active={active}
+                collapsed={collapsed}
+                onClick={onNavigate}
+              />
+            )
+          })}
+        </NavGroup>
+
+        <NavGroup label="Tools" collapsed={collapsed}>
+          {TOOLS.map((tool) => {
+            const href = `/tools/${tool.slug}`
+            return (
+              <NavItem
+                key={tool.slug}
+                href={href}
+                label={tool.nav}
+                icon={tool.icon}
+                active={pathname === href || pathname.startsWith(`${href}/`)}
                 collapsed={collapsed}
                 onClick={onNavigate}
               />

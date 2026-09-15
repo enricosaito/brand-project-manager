@@ -23,6 +23,8 @@ export interface ToolDefinition {
   name: string
   /** Short label for compact navigation. */
   short: string
+  /** Label used in the sidebar. */
+  nav: string
   description: string
   icon: ComponentType<{ className?: string }>
 }
@@ -36,6 +38,7 @@ export const TOOLS: ToolDefinition[] = [
     slug: "convert",
     name: "Image converter",
     short: "Convert",
+    nav: "Converter",
     description: "Turn PNG, JPG, WebP and AVIF into any other format.",
     icon: RiRepeatLine,
   },
@@ -43,6 +46,7 @@ export const TOOLS: ToolDefinition[] = [
     slug: "compress",
     name: "Image compressor",
     short: "Compress",
+    nav: "Compressor",
     description: "Shrink file size with a quality dial and a live before/after.",
     icon: RiFileZipLine,
   },
@@ -50,6 +54,7 @@ export const TOOLS: ToolDefinition[] = [
     slug: "resize",
     name: "Image resizer",
     short: "Resize",
+    nav: "Resizer",
     description: "Exact pixels, percentages or a longest-side limit.",
     icon: RiAspectRatioLine,
   },
@@ -57,6 +62,7 @@ export const TOOLS: ToolDefinition[] = [
     slug: "crop",
     name: "Social media cropper",
     short: "Crop",
+    nav: "Social cropper",
     description: "Frame an image for Instagram, YouTube, LinkedIn, X and more.",
     icon: RiCropLine,
   },
@@ -64,6 +70,7 @@ export const TOOLS: ToolDefinition[] = [
     slug: "remove-background",
     name: "Background remover",
     short: "Remove background",
+    nav: "Background remover",
     description: "Cut out the subject and export a transparent PNG.",
     icon: RiEraserLine,
   },
@@ -71,6 +78,7 @@ export const TOOLS: ToolDefinition[] = [
     slug: "colors",
     name: "Color extractor",
     short: "Colors",
+    nav: "Color extractor",
     description: "Pull a palette from any image, or pick colors by hand.",
     icon: RiPaletteLine,
   },
@@ -78,6 +86,7 @@ export const TOOLS: ToolDefinition[] = [
     slug: "pdf",
     name: "Image to PDF",
     short: "To PDF",
+    nav: "Image to PDF",
     description: "Combine images into a single PDF, one per page.",
     icon: RiFilePdf2Line,
   },

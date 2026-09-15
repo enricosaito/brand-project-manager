@@ -37,7 +37,8 @@ app/(app)/projects, assets, projects/[projectId]/{,assets,tasks,activity}
 app/(app)/demo/**         same routes, wrapped in <WorkspaceProvider mode="demo">
                           seeded from data/snapshot.ts (nested provider wins)
 app/(app)/workspace-actions.ts  switchWorkspace, createWorkspace, seedSampleData
-app/(app)/tools, tools/[tool]   browser-only image tools (registry-driven routes)
+app/(app)/tools/[tool]    browser-only image tools (registry-driven routes; the sidebar
+                          lists every tool, /tools just redirects to the first)
 components/tools/         tool-shell (ToolPage, ToolLayout, ImageDropzone, OutputActions),
                           save-to-project, and one file per tool
 lib/tools/                registry, image (bitmap/canvas/encode/download), palette (median cut),
