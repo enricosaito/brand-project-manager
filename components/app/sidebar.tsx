@@ -15,6 +15,7 @@ import {
   RiMoonLine,
   RiSparklingLine,
   RiSunLine,
+  RiToolsLine,
   RiUser3Line,
 } from "@remixicon/react"
 import { useTheme } from "next-themes"
@@ -43,6 +44,9 @@ const FUTURE = [
   { label: "Brand Library", icon: RiBookOpenLine },
 ]
 
+/** Multi-workspace UI is parked until team features land. Logic stays intact. */
+const SHOW_WORKSPACE_SWITCHER = false
+
 interface SidebarProps {
   user: AuthUser
   workspaces: Workspace[]
@@ -69,6 +73,7 @@ export function Sidebar({
   const nav = [
     { href: `${base}/projects`, label: "Projects", icon: RiFolder3Line },
     { href: `${base}/assets`, label: "Assets", icon: RiImage2Line },
+    { href: "/tools", label: "Tools", icon: RiToolsLine },
   ]
 
   return (
@@ -93,13 +98,15 @@ export function Sidebar({
         </Link>
       </div>
 
-      <WorkspaceSwitcher
-        workspaces={workspaces}
-        currentWorkspaceId={currentWorkspaceId}
-        collapsed={collapsed}
-      />
+      {SHOW_WORKSPACE_SWITCHER && (
+        <WorkspaceSwitcher
+          workspaces={workspaces}
+          currentWorkspaceId={currentWorkspaceId}
+          collapsed={collapsed}
+        />
+      )}
 
-      <nav className="mt-6 flex flex-1 flex-col gap-6">
+      <nav className={cn("flex flex-1 flex-col gap-6", SHOW_WORKSPACE_SWITCHER ? "mt-6" : "mt-2")}>
         <NavGroup label="Workspace" collapsed={collapsed}>
           {nav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`)

@@ -37,6 +37,11 @@ app/(app)/projects, assets, projects/[projectId]/{,assets,tasks,activity}
 app/(app)/demo/**         same routes, wrapped in <WorkspaceProvider mode="demo">
                           seeded from data/snapshot.ts (nested provider wins)
 app/(app)/workspace-actions.ts  switchWorkspace, createWorkspace, seedSampleData
+app/(app)/tools, tools/[tool]   browser-only image tools (registry-driven routes)
+components/tools/         tool-shell (ToolPage, ToolLayout, ImageDropzone, OutputActions),
+                          save-to-project, and one file per tool
+lib/tools/                registry, image (bitmap/canvas/encode/download), palette (median cut),
+                          pdf (pdf-lib), background (isolated engine wrapper)
 components/app            shell + shared primitives (sidebar, page-header, empty-state, field, filter-select…)
 components/{projects,assets,tasks,activity,auth,workspace}
 components/ui             shadcn primitives (generated; radii were reduced on purpose)
@@ -77,6 +82,20 @@ Rules that keep this maintainable:
 - The `(app)` layout wraps everything (including `/demo`) in the live provider
   because moving route folders while `next dev` runs fails on Windows. A
   `(live)` route group is the intended cleanup once the dev server is stopped.
+- Tools are client-only and stateless: load files → Canvas/WASM → Blob.
+  Add a tool by registering it in `lib/tools/registry.ts`, writing a
+  component that uses `ImageDropzone` + `ToolLayout` + `OutputActions`, and
+  mapping it in `app/(app)/tools/[tool]/page.tsx`. "Save to project" reuses
+  the asset upload pipeline. AVIF is encoded with jSquash's WASM encoder
+  loaded at runtime from jsDelivr (see `loadAvifEncoder` in
+  `lib/tools/image.ts`); everything else uses `canvas.toBlob`. Do NOT add
+  `@jsquash/avif` as an npm dependency: Turbopack's production build hangs
+  indefinitely on its WASM/worker graph (bisected 2026-09-14).
+- **Licensing flag:** `@imgly/background-removal` (used by
+  `lib/tools/background.ts`) is AGPL-3.0. Before charging customers, buy an
+  IMG.LY commercial licence or swap the engine (the wrapper is the only
+  touchpoint). The multi-workspace switcher is hidden behind
+  `SHOW_WORKSPACE_SWITCHER` in the sidebar until team features return.
 
 ## Design rules (this is a premium creative tool, not SaaS)
 
@@ -154,7 +173,13 @@ tablet (900px) and phone (420px).
 1. ~~Database schema + RLS~~ (done: `supabase/migrations/20260914000000_initial.sql`)
 2. ~~Supabase-backed store~~ (done: snapshot on load, optimistic writes + rollback)
 3. ~~Real uploads via Storage~~ (done: public `assets` bucket, browser-side video posters)
-4. Workspaces: rename/colour, members list, invitations by email, roles in RLS
-5. Auth polish: password reset, Google sign-in, account settings
-6. Data loading beyond one snapshot: per-page queries, pagination, realtime
-7. AI Studio: auto-tagging and semantic asset search first
+4. ~~Solo tools~~ (done: convert, compress, resize, social crop, background
+   removal, colour extraction, image→PDF under `/tools`)
+5. More solo tools / polish: batch background removal, favicon & app-icon
+   generator, EXIF stripping, brand-colour contrast checker, saving tool
+   presets per workspace
+6. Auth polish: password reset, Google sign-in, account settings
+7. Workspaces & team: rename/colour, members, invitations, roles in RLS
+   (switcher currently hidden)
+8. Data loading beyond one snapshot: per-page queries, pagination, realtime
+9. AI Studio: auto-tagging and semantic asset search first
