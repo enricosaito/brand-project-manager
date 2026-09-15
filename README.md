@@ -34,6 +34,17 @@ Press <kbd>d</kbd> anywhere to toggle dark mode.
 For a local stack: `supabase start` (needs Docker) applies the migrations and
 prints local URL/keys you can put in `.env.local`.
 
+## Tools
+
+`/tools` hosts single-purpose image utilities that run entirely in the
+browser: converter (PNG/JPG/WebP/AVIF), compressor, resizer, social media
+cropper, background remover, colour extractor and image→PDF. Results can be
+downloaded or saved straight into a project as an asset.
+
+Background removal uses `@imgly/background-removal`, which is AGPL-3.0
+licensed; a commercial licence or a different engine is needed before
+commercial use. It is isolated in `lib/tools/background.ts`.
+
 ## Data model
 
 `workspaces` ⟶ `workspace_members` (profiles) ⟶ `projects` ⟶ `assets`, `tasks`,
